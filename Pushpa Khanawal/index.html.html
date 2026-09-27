@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pushpa Khanawal - Operational POS & ERP</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root {
+    --primary: #c2410c;
+    --primary-dark: #9a3412;
+    --dark: #0f172a;
+    --slate: #334155;
+    --light-bg: #f8fafc;
+    --border: #e2e8f0;
+    --green: #15803d;
+    --red: #b91c1c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  body { background: var(--light-bg); color: var(--dark); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* Operational Topbar */
+  header { height: 50px; background: var(--dark); color: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; }
+  .logo { font-size: 18px; font-weight: 800; color: #fb923c; }
+  .nav-btn { background: #1e293b; border: 1px solid #334155; color: #f8fafc; padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; margin-left: 6px; }
+  .nav-btn.active { background: var(--primary); border-color: var(--primary); }
+
+  /* Main Workspace */
+  .main-area { display: grid; grid-template-columns: 260px 1fr 390px; height: calc(100vh - 50px); }
+  
+  /* Left Area: Tables */
+  .table-deck { background: #fff; border-right: 1px solid var(--border); overflow-y: auto; padding: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-content: start; }
+  .tbl-box { border: 1.5px solid var(--border); border-radius: 6px; padding: 10px; cursor: pointer; text-align: center; }
+  .tbl-box.active { border-color: var(--primary); background: #fff7ed; }
+  .tbl-box.occupied { border-left: 5px solid var(--primary); }
+  .tbl-box.vacant { border-left: 5px solid var(--green); }
+
+  /* Center Area: Catalog */
+  .center-panel { display: flex; flex-direction: column; background: var(--light-bg); }
+  .cat-bar { background: #fff; padding: 8px 12px; border-bottom: 1px solid var(--border); display: flex; gap: 6px; }
+  .cat-btn { padding: 6px 12px; border-radius: 16px; border: 1px solid var(--border); background: #fff; font-size: 12px; font-weight: 700; cursor: pointer; }
+  .cat-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+  .menu-grid { padding: 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; overflow-y: auto; }
+  .menu-card { background: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 10px; cursor: pointer; display: flex; flex-direction: column; justify-content: space-between; height: 90px; }
+  .menu-card:hover { border-color: var(--primary); }
+
+  /* Right Area: Billing Engine */
+  .bill-terminal { background: #fff; border-left: 1px solid var(--border); display: flex; flex-direction: column; justify-content: space-between; }
+  .cart-list { flex: 1; overflow-y: auto; padding: 10px; }
+  .cart-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .cart-table th { text-align: left; padding: 6px; background: #f1f5f9; font-size: 11px; }
+  .cart-table td { padding: 6px; border-bottom: 1px solid var(--border); }
+  .amt-block { background: #f8fafc; border-top: 1px solid var(--border); padding: 12px; }
+  .amt-row { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px; }
+  .amt-row.total { font-size: 16px; font-weight: 800; border-top: 1px dashed var(--border); padding-top: 6px; margin-top: 4px; }
+  .btn-deck { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 10px; background: #fff; border-top: 1px solid var(--border); }
+  .action-btn { padding: 10px; border: none; border-radius: 4px; font-weight: 700; cursor: pointer; font-size: 13px; }
+
+  /* Stock & Ledger Views */
+  .overlay-view { display: none; position: fixed; top: 50px; left: 0; width: 100%; height: calc(100vh - 50px); background: #fff; z-index: 10; padding: 20px; overflow-y: auto; }
+  .stock-grid { display: grid; grid-template-columns: 1fr 340px; gap: 20px; }
+  .data-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  .data-table th, .data-table td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; font-size: 13px; }
+  .data-table th { background: #f1f5f9; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">पुष्पा खानावळ (Pushpa Khanawal ERP)</div>
+  <div>
+    <button class="nav-btn active" id="btnPos" onclick="showView('POS')">POS Terminal</button>
+    <button class="nav-btn" id="btnStock" onclick="showView('STOCK')">Raw Stock (Add/Sub)</button>
+    <button class="nav-btn" id="btnLedger" onclick="showView('LEDGER')">General Ledger</button>
+  </div>
+</header>
+
+<!-- MAIN POS VIEW -->
+<div class="main-area" id="viewPOS">
+  <!-- Left Column: Tables -->
+  <div class="table-deck" id="tblList"></div>
+
+  <!-- Center Column: Items -->
+  <div class="center-panel">
+    <div class="cat-bar" id="catBar"></div>
+    <div class="menu-grid" id="menuGrid"></div>
+  </div>
+
+  <!-- Right Column: Cart & Checkout -->
+  <div class="bill-terminal">
+    <div style="padding: 10px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between;">
+      <b id="activeTableName">Select Table</b>
+      <button onclick="clearCurrentTable()" style="border:none; background:transparent; color:var(--red); font-size:12px; cursor:pointer;">Clear</button>
+    </div>
+    
+    <div class="cart-list">
+      <table class="cart-table">
+        <thead>
+          <tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr>
+        </thead>
+        <tbody id="cartBody"></tbody>
+      </table>
+    </div>
+
+    <div>
+      <div class="amt-block">
+        <div class="amt-row"><span>Subtotal</span><span id="subVal">₹0.00</span></div>
+        <div class="amt-row"><span>CGST (2.5%)</span><span id="cgstVal">₹0.00</span></div>
+        <div class="amt-row"><span>SGST (2.5%)</span><span id="sgstVal">₹0.00</span></div>
+        <div class="amt-row total"><span>Payable Amount</span><span id="totalVal">₹0.00</span></div>
+      </div>
+      <div class="btn-deck">
+        <button class="action-btn" style="background:#0284c7; color:#fff;" onclick="printKOT()">Print KOT</button>
+        <button class="action-btn" style="background:var(--slate); color:#fff;" onclick="showPaymentModal('STATIC_UPI')">Static UPI</button>
+        <button class="action-btn" style="background:var(--green); color:#fff; grid-column: span 2;" onclick="showPaymentModal('CASH')">Settle Cash & Clear</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- RAW STOCK (ADD/SUB) VIEW -->
+<div class="overlay-view" id="viewSTOCK">
+  <h2>Raw Material Inventory Ledger (Manual Adjustments)</h2>
+  <div class="stock-grid">
+    <div>
+      <table class="data-table">
+        <thead>
+          <tr><th>Ingredient ID</th><th>Ingredient Name</th><th>Current Stock</th><th>Base Unit</th></tr>
+        </thead>
+        <tbody id="stockTableBody"></tbody>
+      </table>
+    </div>
+    <div style="background:#f8fafc; padding:16px; border:1px solid var(--border); border-radius:6px; height:fit-content;">
+      <h3>Manual Stock Adjustment</h3>
+      <div style="margin-top:10px;">
+        <label style="font-size:12px;">Select Ingredient:</label>
+        <select id="adjItem" style="width:100%; padding:6px; margin:4px 0 10px;"></select>
+        
+        <label style="font-size:12px;">Action Type:</label>
+        <select id="adjType" style="width:100%; padding:6px; margin:4px 0 10px;">
+          <option value="PURCHASE_ADD">Purchase Inward (+ Add)</option>
+          <option value="MANUAL_SUBTRACT">Kitchen Usage / Spoilage (- Subtract)</option>
+        </select>
+        
+        <label style="font-size:12px;">Quantity:</label>
+        <input type="number" step="0.1" id="adjQty" style="width:100%; padding:6px; margin:4px 0 10px;" placeholder="e.g. 5.0">
+        
+        <label style="font-size:12px;">Reason / Notes:</label>
+        <input type="text" id="adjReason" style="width:100%; padding:6px; margin:4px 0 10px;" placeholder="e.g. Purchase from Mandi">
+
+        <button class="action-btn" style="width:100%; background:var(--green); color:#fff; margin-top:8px;" onclick="submitStockAdj()">Commit Adjustment</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- GENERAL LEDGER AUDIT VIEW -->
+<div class="overlay-view" id="viewLEDGER">
+  <h2>General Accounting Ledger (Real-Time Double Entry)</h2>
+  <table class="data-table" style="margin-top:12px;">
+    <thead>
+      <tr><th>Entry ID</th><th>Timestamp</th><th>Reference Voucher</th><th>Account Head</th><th>Direction</th><th>Amount</th></tr>
+    </thead>
+    <tbody id="ledgerTableBody"></tbody>
+  </table>
+</div>
+
+<!-- STATIC FREE UPI MODAL -->
+<div id="upiModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:100; justify-content:center; align-items:center;">
+  <div style="background:#fff; padding:20px; border-radius:8px; width:340px; text-align:center;">
+    <h3>पुष्पा खानावळ - UPI Settlement</h3>
+    <p style="font-size:12px; color:#666; margin:6px 0;">Permanent Static Merchant QR (Zero Processing Fees)</p>
+    <div id="staticQrHolder" style="display:flex; justify-content:center; margin:12px 0;"></div>
+    <div style="font-weight:700; font-size:16px;" id="modalPayAmt">Bill: ₹0.00</div>
+    <p style="font-size:11px; color:#475569; margin:8px 0;">Instruct customer to verify amount on their phone and scan.</p>
+    <button class="action-btn" style="width:100%; background:var(--green); color:#fff; margin-top:6px;" onclick="confirmSettlement('STATIC_UPI')">Confirm Received & Free Table</button>
+    <button class="action-btn" style="width:100%; background:#94a3b8; color:#fff; margin-top:6px;" onclick="closeModal()">Cancel</button>
+  </div>
+</div>
+
+<script>
+  const API = "http://127.0.0.1:8000/api";
+  
+  // Tables state
+  const TABLES = [
+    { id: "T-01", name: "Table 1", items: [] },
+    { id: "T-02", name: "Table 2", items: [] },
+    { id: "T-03", name: "Table 3", items: [] },
+    { id: "T-04", name: "Table 4", items: [] },
+    { id: "PARCEL", name: "Takeaway", items: [] }
+  ];
+
+  // Menu Catalog with Bill-of-Materials (BOM) for stock auto-deduction
+  const MENU = [
+    { id: "M01", name: "Special Mutton Thali (मटण थाळी)", cat: "Thali", price: 380, bom: [{ ingredient_id: "RAW_MUTTON", qty: 0.25 }, { ingredient_id: "RAW_BHAKRI_FLOUR", qty: 0.1 }] },
+    { id: "M02", name: "Chicken Thali (चिकन थाळी)", cat: "Thali", price: 280, bom: [{ ingredient_id: "RAW_CHICKEN", qty: 0.25 }] },
+    { id: "M03", name: "Jowar Bhakri (ज्वारी भाकरी)", cat: "Breads", price: 30, bom: [{ ingredient_id: "RAW_BHAKRI_FLOUR", qty: 0.08 }] },
+    { id: "M04", name: "Tambda/Pandhra Bowl", cat: "Extra", price: 50, bom: [] }
+  ];
+
+  let currentTable = "T-01";
+  let activeCat = "All";
+
+  window.onload = () => {
+    renderTables();
+    renderCategories();
+    renderMenu();
+    selectTable("T-01");
+    // Generate Static Free UPI QR (No dynamic charges, points to permanent merchant VPA)
+    new QRCode(document.getElementById("staticQrHolder"), {
+      text: "upi://pay?pa=pushpakhanawal@upi&pn=Pushpa%20Khanawal",
+      width: 140,
+      height: 140
+    });
+  };
+
+  function renderTables() {
+    const el = document.getElementById("tblList");
+    el.innerHTML = "";
+    TABLES.forEach(t => {
+      const isOcc = t.items.length > 0;
+      el.innerHTML += `
+        <div class="tbl-box ${t.id === currentTable ? 'active' : ''} ${isOcc ? 'occupied' : 'vacant'}" onclick="selectTable('${t.id}')">
+          <div style="font-weight:700;">${t.name}</div>
+          <div style="font-size:11px; margin-top:4px;">${isOcc ? 'In Service' : 'Vacant'}</div>
+        </div>
+      `;
+    });
+  }
+
+  function selectTable(id) {
+    currentTable = id;
+    const t = TABLES.find(x => x.id === id);
+    document.getElementById("activeTableName").innerText = t.name;
+    renderTables();
+    renderCart();
+  }
+
+  function renderCategories() {
+    const cats = ["All", ...new Set(MENU.map(m => m.cat))];
+    const el = document.getElementById("catBar");
+    el.innerHTML = "";
+    cats.forEach(c => {
+      el.innerHTML += `<button class="cat-btn ${c === activeCat ? 'active' : ''}" onclick="setCategory('${c}')">${c}</button>`;
+    });
+  }
+
+  function setCategory(c) {
+    activeCat = c;
+    renderCategories();
+    renderMenu();
+  }
+
+  function renderMenu() {
+    const el = document.getElementById("menuGrid");
+    el.innerHTML = "";
+    MENU.filter(m => activeCat === "All" || m.cat === activeCat).forEach(item => {
+      el.innerHTML += `
+        <div class="menu-card" onclick="addToOrder('${item.id}')">
+          <div style="font-weight:600; font-size:13px;">${item.name}</div>
+          <div style="font-weight:800; color:var(--primary); font-size:14px;">₹${item.price}</div>
+        </div>
+      `;
+    });
+  }
+
+  function addToOrder(id) {
+    const t = TABLES.find(x => x.id === currentTable);
+    const item = MENU.find(m => m.id === id);
+    const exist = t.items.find(i => i.id === id);
+    if(exist) {
+      exist.qty += 1;
+    } else {
+      t.items.push({ ...item, qty: 1 });
+    }
+    renderCart();
+    renderTables();
+  }
+
+  function renderCart() {
+    const t = TABLES.find(x => x.id === currentTable);
+    const tbody = document.getElementById("cartBody");
+    tbody.innerHTML = "";
+    let sub = 0;
+
+    t.items.forEach(i => {
+      const line = i.price * i.qty;
+      sub += line;
+      tbody.innerHTML += `
+        <tr>
+          <td>${i.name}</td>
+          <td>${i.qty}</td>
+          <td>₹${i.price}</td>
+          <td>₹${line}</td>
+        </tr>
+      `;
+    });
+
+    const cgst = sub * 0.025;
+    const sgst = sub * 0.025;
+    const grand = sub + cgst + sgst;
+
+    document.getElementById("subVal").innerText = `₹${sub.toFixed(2)}`;
+    document.getElementById("cgstVal").innerText = `₹${cgst.toFixed(2)}`;
+    document.getElementById("sgstVal").innerText = `₹${sgst.toFixed(2)}`;
+    document.getElementById("totalVal").innerText = `₹${grand.toFixed(2)}`;
+  }
+
+  function clearCurrentTable() {
+    const t = TABLES.find(x => x.id === currentTable);
+    t.items = [];
+    renderCart();
+    renderTables();
+  }
+
+  function printKOT() {
+    const t = TABLES.find(x => x.id === currentTable);
+    if(t.items.length === 0) return alert("No items ordered");
+    alert(`[KOT PRINTED DIRECT TO KITCHEN]\nTable: ${t.name}\nTimestamp: ${new Date().toLocaleTimeString()}\nItems:\n` + t.items.map(i => `- ${i.name} x ${i.qty}`).join("\n"));
+  }
+
+  // --- Backend Settlement Engine Integration ---
+  function showPaymentModal(mode) {
+    const t = TABLES.find(x => x.id === currentTable);
+    if(t.items.length === 0) return alert("Cannot settle empty table");
+    
+    if(mode === 'STATIC_UPI') {
+      const total = document.getElementById("totalVal").innerText;
+      document.getElementById("modalPayAmt").innerText = `Bill Amount: ${total}`;
+      document.getElementById("upiModal").style.display = "flex";
+    } else {
+      confirmSettlement('CASH');
+    }
+  }
+
+  async function confirmSettlement(mode) {
+    const t = TABLES.find(x => x.id === currentTable);
+    const sub = t.items.reduce((a, b) => a + (b.price * b.qty), 0);
+    const cgst = sub * 0.025;
+    const sgst = sub * 0.025;
+    const grand = sub + cgst + sgst;
+
+    // Collect consumed ingredients from BOM
+    let consumed = [];
+    t.items.forEach(item => {
+      item.bom.forEach(b => {
+        consumed.push({ ingredient_id: b.ingredient_id, qty: b.qty * item.qty });
+      });
+    });
+
+    const payload = {
+      order_id: `INV-${Date.now().toString().slice(-6)}`,
+      table_name: t.name,
+      subtotal: sub,
+      cgst: cgst,
+      sgst: sgst,
+      grand_total: grand,
+      payment_mode: mode,
+      consumed_stock: consumed
+    };
+
+    try {
+      const res = await fetch(`${API}/billing/settle`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if(res.ok) {
+        alert(`Bill Cleared & Posted to General Ledger!\nVoucher: ${payload.order_id}\nPayment Mode: ${mode}`);
+        clearCurrentTable();
+        closeModal();
+      }
+    } catch(err) {
+      alert("Local Server Offline! Settle manually on counter.");
+    }
+  }
+
+  function closeModal() {
+    document.getElementById("upiModal").style.display = "none";
+  }
+
+  // --- Stock Adjustment & Ledger Sync ---
+  async function showView(view) {
+    document.getElementById("viewPOS").style.display = view === 'POS' ? 'grid' : 'none';
+    document.getElementById("viewSTOCK").style.display = view === 'STOCK' ? 'block' : 'none';
+    document.getElementById("viewLEDGER").style.display = view === 'LEDGER' ? 'block' : 'none';
+
+    document.getElementById("btnPos").className = `nav-btn ${view === 'POS' ? 'active' : ''}`;
+    document.getElementById("btnStock").className = `nav-btn ${view === 'STOCK' ? 'active' : ''}`;
+    document.getElementById("btnLedger").className = `nav-btn ${view === 'LEDGER' ? 'active' : ''}`;
+
+    if(view === 'STOCK') loadStockData();
+    if(view === 'LEDGER') loadLedgerData();
+  }
+
+  async function loadStockData() {
+    try {
+      const res = await fetch(`${API}/inventory`);
+      const data = await res.json();
+      const tbody = document.getElementById("stockTableBody");
+      const sel = document.getElementById("adjItem");
+      tbody.innerHTML = "";
+      sel.innerHTML = "";
+
+      data.forEach(item => {
+        tbody.innerHTML += `<tr><td>${item.ingredient_id}</td><td><b>${item.name}</b></td><td>${item.current_stock.toFixed(2)}</td><td>${item.unit}</td></tr>`;
+        sel.innerHTML += `<option value="${item.ingredient_id}">${item.name} (${item.unit})</option>`;
+      });
+    } catch(err) {
+      console.warn("Stock backend unreachable");
+    }
+  }
+
+  async function submitStockAdj() {
+    const payload = {
+      ingredient_id: document.getElementById("adjItem").value,
+      quantity: parseFloat(document.getElementById("adjQty").value),
+      movement_type: document.getElementById("adjType").value,
+      reason: document.getElementById("adjReason").value || "Manual Balance"
+    };
+
+    if(!payload.quantity || payload.quantity <= 0) return alert("Enter valid quantity");
+
+    const res = await fetch(`${API}/inventory/adjust`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    if(res.ok) {
+      alert("Inventory Adjusted & Stock Movement Logged!");
+      document.getElementById("adjQty").value = "";
+      document.getElementById("adjReason").value = "";
+      loadStockData();
+    }
+  }
+
+  async function loadLedgerData() {
+    try {
+      const res = await fetch(`${API}/reports/ledger`);
+      const data = await res.json();
+      const tbody = document.getElementById("ledgerTableBody");
+      tbody.innerHTML = "";
+      data.forEach(row => {
+        tbody.innerHTML += `
+          <tr>
+            <td>${row.entry_id}</td>
+            <td>${row.timestamp}</td>
+            <td><b>${row.voucher_id}</b></td>
+            <td>${row.account_head}</td>
+            <td style="color:${row.direction==='DEBIT'?'var(--green)':'var(--primary)'}; font-weight:700;">${row.direction}</td>
+            <td>₹${row.amount.toFixed(2)}</td>
+          </tr>
+        `;
+      });
+    } catch(err) {
+      console.warn("Ledger backend unreachable");
+    }
+  }
+</script>
+</body>
+</html>
